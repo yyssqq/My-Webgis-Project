@@ -11,6 +11,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@turf/turf": "^7.3.5",
     "express": "^5.2.1",
     "ws": "^8.21.1"
   }

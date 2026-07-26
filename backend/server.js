@@ -1,6 +1,7 @@
 const express = require("express");
 const http = require("http");
 const { WebSocketServer } = require("ws");
+const { listTools, executeTool } = require("./tools");
 
 const app = express();
 const server = http.createServer(app);
@@ -38,6 +39,30 @@ app.post("/api/click", (req, res) => {
   });
 
   res.json({ success: true, lng, lat, totalClicks: clickHistory.length });
+});
+
+// 获取所有可用工具列表
+app.get("/api/tools", (req, res) => {
+  res.json({ tools: listTools() });
+});
+
+// 执行 GIS 工具
+app.post("/api/tools", (req, res) => {
+  const { tool, params } = req.body;
+  try {
+    const result = executeTool(tool, params);
+    console.log(`工具 ${tool} 执行成功: ${result.summary}`);
+
+    // 通过 WebSocket 广播结果给所有客户端
+    const broadcast = JSON.stringify({ type: "tool_result", tool, result });
+    wss.clients.forEach((client) => {
+      if (client.readyState === 1) client.send(broadcast);
+    });
+
+    res.json({ success: true, result });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
 });
 
 // ===== WebSocket =====

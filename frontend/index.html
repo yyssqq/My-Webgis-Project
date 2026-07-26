@@ -8,12 +8,40 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
-    #map {
-      width: 100vw;
-      height: 100vh;
-    }
+    #map { width: 100vw; height: 100vh; }
 
-    /* 状态栏：固定在左下角，显示后端连接情况 */
+    /* 工具栏：固定右下角 */
+    #tools {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: rgba(0, 0, 0, 0.8);
+      color: #fff;
+      padding: 14px 18px;
+      border-radius: 8px;
+      font-family: monospace;
+      font-size: 13px;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    #tools button {
+      padding: 8px 14px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      background: #4a90d9;
+      color: #fff;
+      font-family: monospace;
+    }
+    #tools button:hover { background: #357abd; }
+    #tools button:disabled { background: #555; cursor: not-allowed; }
+
+    #tools .info { color: #aaa; font-size: 11px; }
+
+    /* 状态栏 */
     #status {
       position: fixed;
       bottom: 20px;
@@ -25,10 +53,7 @@
       font-family: monospace;
       font-size: 13px;
       z-index: 1000;
-      max-width: 360px;
     }
-
-    /* 连接状态指示灯 */
     #status .dot {
       display: inline-block;
       width: 8px;
@@ -43,6 +68,14 @@
 <body>
   <div id="map"></div>
 
+  <!-- 工具栏 -->
+  <div id="tools">
+    <div class="info" id="pointInfo">在地图上点击选取点</div>
+    <button id="btnBuffer" disabled>🔴 生成缓冲区 (5km)</button>
+    <button id="btnDistance" disabled>🔵 计算两点距离</button>
+    <button id="btnClear">↩ 清除</button>
+  </div>
+
   <!-- 状态栏 -->
   <div id="status">
     <span class="dot off" id="dot"></span>
@@ -51,14 +84,12 @@
 
   <script src="https://cdn.jsdelivr.net/npm/ol@10/dist/ol.js"></script>
   <script>
-    // ===== 1. 地图初始化（阶段 3 的代码） =====
+    // ===== 1. 地图初始化 =====
 
     const map = new ol.Map({
       target: "map",
       layers: [
-        new ol.layer.Tile({
-          source: new ol.source.OSM()
-        })
+        new ol.layer.Tile({ source: new ol.source.OSM() })
       ],
       view: new ol.View({
         center: ol.proj.fromLonLat([116.4, 39.9]),
@@ -66,15 +97,15 @@
       })
     });
 
-    // ===== 2. 点击标记图层 =====
+    // ===== 2. 图层 =====
 
-    // 创建一个矢量图层，用来存放用户点击后的标记点
+    // 标记图层（用户点击的点）
     const markerSource = new ol.source.Vector();
     const markerLayer = new ol.layer.Vector({
       source: markerSource,
       style: new ol.style.Style({
         image: new ol.style.Circle({
-          radius: 8,
+          radius: 7,
           fill: new ol.style.Fill({ color: "#ff4444" }),
           stroke: new ol.style.Stroke({ color: "#fff", width: 2 })
         })
@@ -82,104 +113,173 @@
     });
     map.addLayer(markerLayer);
 
-    // ===== 3. 点击地图 =====
+    // 工具结果图层（缓冲区、距离线等）
+    const resultSource = new ol.source.Vector();
+    const resultLayer = new ol.layer.Vector({
+      source: resultSource,
+      style: new ol.style.Style({
+        stroke: new ol.style.Stroke({ color: "#4a90d9", width: 2.5 }),
+        fill: new ol.style.Fill({ color: "rgba(74, 144, 217, 0.15)" })
+      })
+    });
+    map.addLayer(resultLayer);
+
+    // ===== 3. 选点逻辑 =====
+
+    const selectedPoints = [];   // 存储用户点击的点 [{lng, lat, feature}]
 
     map.on("click", (evt) => {
-      // evt.coordinate 是 Web 墨卡托坐标，转成经纬度
       const [lng, lat] = ol.proj.toLonLat(evt.coordinate);
-      console.log(`点击坐标: 经度=${lng.toFixed(4)}, 纬度=${lat.toFixed(4)}`);
 
-      // 方式一：通过 HTTP POST 发给后端
-      fetch("http://localhost:3000/api/click", {
+      // 在地图上添加红点标记
+      const feature = new ol.Feature({
+        geometry: new ol.geom.Point(ol.proj.fromLonLat([lng, lat]))
+      });
+      markerSource.addFeature(feature);
+
+      // 存入数组
+      selectedPoints.push({ lng, lat, feature });
+      if (selectedPoints.length > 2) {
+        // 只保留最近 2 个点，移除最旧的
+        const old = selectedPoints.shift();
+        markerSource.removeFeature(old.feature);
+      }
+
+      // 更新按钮状态
+      updateButtons();
+    });
+
+    function updateButtons() {
+      const n = selectedPoints.length;
+      document.getElementById("pointInfo").textContent =
+        n === 0 ? "在地图上点击选取点" :
+        n === 1 ? `已选 1 个点: (${selectedPoints[0].lng.toFixed(4)}, ${selectedPoints[0].lat.toFixed(4)})` :
+                  `已选 2 个点`;
+      document.getElementById("btnBuffer").disabled = (n < 1);
+      document.getElementById("btnDistance").disabled = (n < 2);
+    }
+
+    // ===== 4. 工具按钮 =====
+
+    // 缓冲区
+    document.getElementById("btnBuffer").onclick = () => {
+      const p = selectedPoints[selectedPoints.length - 1];  // 最新选的点
+      callTool("buffer", { lng: p.lng, lat: p.lat, distance: 5 });
+    };
+
+    // 距离
+    document.getElementById("btnDistance").onclick = () => {
+      const a = selectedPoints[0];
+      const b = selectedPoints[1];
+      callTool("distance", { from: { lng: a.lng, lat: a.lat }, to: { lng: b.lng, lat: b.lat } });
+    };
+
+    // 清除
+    document.getElementById("btnClear").onclick = () => {
+      markerSource.clear();
+      resultSource.clear();
+      selectedPoints.length = 0;
+      updateButtons();
+    };
+
+    /**
+     * 调用后端 GIS 工具
+     */
+    function callTool(toolName, params) {
+      // 方式一：HTTP POST
+      fetch("http://localhost:3000/api/tools", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lng, lat })
+        body: JSON.stringify({ tool: toolName, params })
       })
         .then((res) => res.json())
         .then((data) => {
-          console.log("HTTP 响应:", data);
-          setStatus(true, `点击已提交 (第 ${data.totalClicks} 次)`);
+          if (data.success) {
+            setStatus(true, data.result.summary);
+          } else {
+            setStatus(false, "工具执行失败: " + data.error);
+          }
         })
         .catch((err) => {
-          console.error("HTTP 请求失败:", err);
           setStatus(false, "后端未连接，请先启动 node server.js");
+          console.error(err);
         });
 
-      // 方式二：通过 WebSocket 发给后端
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: "click", lng, lat }));
-      }
-    });
+      // 方式二：WebSocket（后端执行后会广播回来，ws.onmessage 统一处理）
+    }
 
-    // ===== 4. WebSocket 连接 =====
+    // ===== 5. WebSocket =====
 
     let ws = null;
 
     function connectWebSocket() {
       ws = new WebSocket("ws://localhost:3000");
 
-      // 连接成功
-      ws.onopen = () => {
-        console.log("WebSocket 连接成功");
-        setStatus(true, "WebSocket 已连接");
+      ws.onopen = () => setStatus(true, "WebSocket 已连接");
 
-        // 把之前收到的点击历史补画出来
-        markerSource.clear();
-        ws._history?.forEach(({ lng, lat }) => {
-          addMarker(lng, lat);
-        });
-      };
-
-      // 收到消息
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
-          console.log("WebSocket 收到:", msg);
 
           if (msg.type === "welcome") {
-            // 保存历史记录，等连接建立后用
-            ws._history = msg.history;
             setStatus(true, msg.message);
           }
 
-          if (msg.type === "click") {
-            addMarker(msg.lng, msg.lat);
-            setStatus(true, `收到点击 (共 ${msg.totalClicks} 次)`);
+          if (msg.type === "tool_result") {
+            // 收到工具执行结果 → 在地图上渲染
+            renderToolResult(msg.tool, msg.result);
+            setStatus(true, msg.result.summary);
           }
         } catch {
           console.log("收到文本:", event.data);
         }
       };
 
-      // 断开时自动重连
       ws.onclose = () => {
-        console.log("WebSocket 断开，3 秒后重连...");
-        setStatus(false, "连接断开，尝试重连...");
+        setStatus(false, "连接断开，3 秒后重连...");
         setTimeout(connectWebSocket, 3000);
       };
 
-      ws.onerror = () => {
-        setStatus(false, "连接失败，请确认后端已启动");
-      };
+      ws.onerror = () => setStatus(false, "连接失败，请确认后端已启动");
     }
 
-    // ===== 5. 辅助函数 =====
+    /**
+     * 把工具返回的 GeoJSON 渲染到地图上
+     */
+    function renderToolResult(toolName, result) {
+      if (!result.geojson) return;
 
-    // 在地图上添加标记
-    function addMarker(lng, lat) {
-      const point = new ol.Feature({
-        geometry: new ol.geom.Point(ol.proj.fromLonLat([lng, lat]))
+      // 根据工具类型设置不同样式
+      let style;
+      if (toolName === "buffer") {
+        style = new ol.style.Style({
+          stroke: new ol.style.Stroke({ color: "#e74c3c", width: 3 }),
+          fill: new ol.style.Fill({ color: "rgba(231, 76, 60, 0.2)" })
+        });
+      } else if (toolName === "distance") {
+        style = new ol.style.Style({
+          stroke: new ol.style.Stroke({ color: "#2ecc71", width: 3, lineDash: [6, 4] })
+        });
+      }
+
+      // GeoJSON → OpenLayers Feature
+      const geojsonFormat = new ol.format.GeoJSON();
+      const features = geojsonFormat.readFeatures(result.geojson, {
+        featureProjection: "EPSG:3857"   // 转成地图用的坐标
       });
-      markerSource.addFeature(point);
+      features.forEach((f) => f.setStyle(style));
+
+      resultSource.clear();
+      resultSource.addFeatures(features);
     }
 
-    // 更新状态栏
+    // ===== 6. 辅助函数 =====
+
     function setStatus(connected, text) {
       document.getElementById("dot").className = "dot " + (connected ? "on" : "off");
       document.getElementById("statusText").textContent = text;
     }
 
-    // ===== 启动 WebSocket =====
     connectWebSocket();
   </script>
 </body>
