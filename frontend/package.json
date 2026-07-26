@@ -1,5 +1,5 @@
 {
-  "name": "backend",
+  "name": "frontend",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -11,10 +11,6 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@turf/turf": "^7.3.5",
-    "express": "^5.2.1",
-    "shapefile": "^0.6.6",
-    "shp-write": "^0.3.2",
-    "ws": "^8.21.1"
+    "cesium": "^1.143.0"
   }
 }
