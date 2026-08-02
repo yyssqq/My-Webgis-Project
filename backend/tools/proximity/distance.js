@@ -28,4 +28,30 @@ function execute(params) {
   };
 }
 
-module.exports = { name: "distance", description: "距离分析：计算两点间的直线距离", execute };
+module.exports = {
+  name: "distance",
+  description: "距离分析：计算两点间的直线距离",
+  paramsSchema: {
+    type: "object",
+    properties: {
+      from: {
+        type: "object",
+        properties: {
+          lng: { type: "number", description: "起点经度" },
+          lat: { type: "number", description: "起点纬度" },
+        },
+        description: "起点坐标 {lng, lat}",
+      },
+      to: {
+        type: "object",
+        properties: {
+          lng: { type: "number", description: "终点经度" },
+          lat: { type: "number", description: "终点纬度" },
+        },
+        description: "终点坐标 {lng, lat}",
+      },
+    },
+    required: ["from", "to"],
+  },
+  execute,
+};

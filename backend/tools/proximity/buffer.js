@@ -22,4 +22,17 @@ function execute(params) {
   };
 }
 
-module.exports = { name: "buffer", description: "缓冲区分析：围绕一个点生成指定半径的区域", execute };
+module.exports = {
+  name: "buffer",
+  description: "缓冲区分析：围绕一个点生成指定半径的区域",
+  paramsSchema: {
+    type: "object",
+    properties: {
+      lng: { type: "number", description: "中心点经度" },
+      lat: { type: "number", description: "中心点纬度" },
+      distance: { type: "number", description: "缓冲区半径（公里）" },
+    },
+    required: ["lng", "lat", "distance"],
+  },
+  execute,
+};

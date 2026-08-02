@@ -39,4 +39,15 @@ async function execute(params) {
   };
 }
 
-module.exports = { name: "geocode", description: "地理编码：将地名（如大理古城、纽约中央公园）转换为经纬度坐标", execute };
+module.exports = {
+  name: "geocode",
+  description: "地理编码：将地名（如大理古城、纽约中央公园）转换为经纬度坐标",
+  paramsSchema: {
+    type: "object",
+    properties: {
+      place: { type: "string", description: "地名，如 北京天安门、大理古城" },
+    },
+    required: ["place"],
+  },
+  execute,
+};
