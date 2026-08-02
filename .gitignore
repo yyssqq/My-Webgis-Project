@@ -8,3 +8,8 @@ dist/
 *.tar.gz
 *.zip
 runtime/
+
+# 前端构建产物
+frontend/tsconfig.tsbuildinfo
+frontend/public/cesium/
+screenshot-*.png

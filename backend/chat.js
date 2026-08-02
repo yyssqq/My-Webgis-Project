@@ -1,6 +1,6 @@
 const fs = require("fs");
 const path = require("path");
-const { listTools, executeTool } = require("./tools");
+const { listTools, executeTool } = require("./tools/registry");
 
 /**
  * 加载 skills 目录下所有的 SKILL.md 文件
