@@ -43,6 +43,25 @@ export async function deleteLayer(name: string): Promise<void> {
   });
 }
 
+export async function publishLayer(
+  name: string
+): Promise<{ wmsUrl: string; wfsUrl: string; layerName: string; summary: string }> {
+  return request<{ success: boolean; wmsUrl: string; wfsUrl: string; layerName: string; summary: string }>(
+    `/api/layers/${encodeURIComponent(name)}/publish`,
+    { method: "POST" }
+  );
+}
+
+export function downloadLayerGeoJson(name: string): void {
+  const url = `/api/layers/${encodeURIComponent(name)}/export`;
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${name}.geojson`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 export async function executeToolRaw(
   tool: string,
   params: Record<string, unknown>

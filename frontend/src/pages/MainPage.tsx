@@ -22,6 +22,7 @@ export default function MainPage() {
   const [chat, setChat] = useState<ChatView[]>([]);
   const [loading, setLoading] = useState(false);
   const [wsStatus, setWsStatus] = useState<"off" | "on" | "connecting">("connecting");
+  const [publishing, setPublishing] = useState<string | null>(null);
 
   const olHandle = useRef<OlHandle | null>(null);
   const cesiumHandle = useRef<CesiumHandle | null>(null);
@@ -124,6 +125,27 @@ export default function MainPage() {
     await refreshLayers();
   };
 
+  // 发布到 GeoServer：成功后把 WMS 叠加到 2D 地图，并在聊天里提示
+  const handlePublish = async (name: string) => {
+    setPublishing(name);
+    try {
+      const r = await api.publishLayer(name);
+      olHandle.current?.addWms(r.layerName, r.wmsUrl);
+      setChat((c) => [
+        ...c,
+        { role: "system", content: `✅ 图层「${r.layerName}」已发布到 GeoServer，已叠加到 2D 地图` },
+      ]);
+    } catch (err) {
+      setChat((c) => [...c, { role: "system", content: "❌ 发布失败: " + (err as Error).message }]);
+    } finally {
+      setPublishing(null);
+    }
+  };
+
+  const handleExport = (name: string) => {
+    api.downloadLayerGeoJson(name);
+  };
+
   const handleSend = async (text: string) => {
     setChat((c) => [...c, { role: "user", content: text }]);
     setLoading(true);
@@ -149,9 +171,32 @@ export default function MainPage() {
           visible={visible}
           onToggleVisibility={toggleVisibility}
           onDelete={handleDelete}
+          onPublish={handlePublish}
+          onExport={handleExport}
+          publishing={publishing}
         />
 
         <main style={{ flex: 1, position: "relative", background: "#000" }}>
+          <button
+            onClick={() => olHandle.current?.exportPng()}
+            title="导出当前 2D 地图为 PNG"
+            style={{
+              position: "absolute",
+              right: 12,
+              top: 12,
+              zIndex: 5,
+              padding: "4px 10px",
+              fontSize: 11,
+              border: "1px solid var(--border)",
+              borderRadius: 6,
+              background: "var(--bg-card)",
+              color: "var(--text)",
+              cursor: "pointer",
+              fontFamily: "inherit",
+            }}
+          >
+            📸 导出 PNG
+          </button>
           <MapView active={mode.kind === "2d"} onReady={(h) => (olHandle.current = h)} />
           <GlobeView active={mode.kind === "3d"} onReady={(h) => (cesiumHandle.current = h)} />
         </main>

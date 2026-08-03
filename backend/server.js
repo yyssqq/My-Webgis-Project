@@ -2,6 +2,7 @@ const express = require("express");
 const http = require("http");
 const path = require("path");
 const { WebSocketServer } = require("ws");
+const { createProxyMiddleware } = require("http-proxy-middleware");
 const { listTools, executeTool } = require("./tools/registry");
 const { chat } = require("./chat");
 const publish = require("./tools/publish");
@@ -26,6 +27,17 @@ app.use((req, res, next) => {
 
 // 提供前端静态文件（Cesium 需要 HTTP 访问）
 app.use(express.static(path.join(__dirname, "..", "frontend")));
+
+// 代理 /geoserver → 本机 GeoServer（同源，规避浏览器跨域；生产/开发都走这里）
+// 注意：Express 挂载后 req.url 是剩余路径(去掉了 /geoserver)，这里补回前缀
+app.use(
+  "/geoserver",
+  createProxyMiddleware({
+    target: "http://localhost:8080",
+    changeOrigin: true,
+    pathRewrite: { "^/": "/geoserver/" },
+  })
+);
 
 // ===== HTTP 接口 =====
 
@@ -119,6 +131,27 @@ app.delete("/api/layers/:name", (req, res) => {
   const ok = layers.remove(req.params.name);
   if (!ok) return res.status(404).json({ error: `图层不存在: ${req.params.name}` });
   res.json({ success: true });
+});
+
+// 发布图层到 GeoServer WMS/WFS
+app.post("/api/layers/:name/publish", async (req, res) => {
+  const layer = layers.get(req.params.name);
+  if (!layer) return res.status(404).json({ error: `图层不存在: ${req.params.name}` });
+  try {
+    const result = await publish.execute({ layerName: layer.name, geojson: layer.geojson });
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 导出图层（GeoJSON 下载）
+app.get("/api/layers/:name/export", (req, res) => {
+  const layer = layers.get(req.params.name);
+  if (!layer) return res.status(404).json({ error: `图层不存在: ${req.params.name}` });
+  res.setHeader("Content-Type", "application/geo+json");
+  res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(layer.name)}.geojson"`);
+  res.send(JSON.stringify(layer.geojson));
 });
 
 // AI Agent 对话

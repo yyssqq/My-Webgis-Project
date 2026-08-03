@@ -60,6 +60,19 @@
 ### DELETE /api/layers/:name
 删除图层。响应 `{ "success": true }`。
 
+### POST /api/layers/:name/publish
+把图层发布到 GeoServer（GeoJSON → shapefile → REST 上传，WMS/WFS）。
+响应 `{ "success": true, "wmsUrl": "/geoserver/mywebgis/wms", "wfsUrl": "...", "layerName": "..." }`。
+
+### GET /api/layers/:name/export
+下载该图层的 GeoJSON 文件（`Content-Disposition: attachment`）。
+
+## GeoServer 代理
+
+- `/geoserver/*` 由后端代理到 `http://localhost:8080/geoserver/*`（同源，规避浏览器跨域）。
+- 前端 WMS 地址用相对路径 `/geoserver/{workspace}/wms`。
+- 发布机制：`@mapbox/shp-write` 生成 shapefile zip → `PUT /rest/workspaces/{ws}/datastores/{ds}/file.shp?configure=all` 自动建库并发布。
+
 ## WebSocket 消息
 
 | type | payload | 说明 |

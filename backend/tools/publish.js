@@ -1,99 +1,58 @@
 const fs = require("fs");
 const path = require("path");
-const shpWrite = require("shp-write");
+const shpwrite = require("@mapbox/shp-write");
 
 const GS_URL = "http://localhost:8080/geoserver";
 const GS_AUTH = "Basic " + Buffer.from("admin:geoserver").toString("base64");
 const WORKSPACE = "mywebgis";
 
 /**
- * 发布工具：GeoJSON → Shapefile → GeoServer WMS/WFS
+ * 发布工具：GeoJSON → shapefile(zip) → GeoServer REST 上传，发布为 WMS/WFS。
+ * 使用 @mapbox/shp-write（shp-write 官方维护版）生成 shapefile，
+ * 通过 PUT .../datastores/{name}/file.shp?configure=all 一次完成建库 + 发布。
  */
 async function execute(params) {
   const { layerName, geojson } = params;
+  if (!layerName || !geojson) throw new Error("publish 需要 layerName 和 geojson");
 
-  // 1. 确保 workspace 存在
   await ensureWorkspace();
 
-  // 2. GeoJSON 转 Shapefile，保存到 GeoServer 数据目录
-  const dataDir = path.join(
-    __dirname, "..", "..", "runtime", "data_dir", "data", WORKSPACE, layerName
-  );
-  fs.mkdirSync(dataDir, { recursive: true });
+  // 1. GeoJSON → shapefile zip（所有几何类型统一命名为 layerName，避免类型名当图层名）
+  const fc =
+    geojson.type === "FeatureCollection"
+      ? geojson
+      : { type: "FeatureCollection", features: [geojson] };
+  const types = { point: layerName, polyline: layerName, polygon: layerName, multipolygon: layerName, multiline: layerName };
+  const zipBuffer = await shpwrite.zip(fc, { outputType: "nodebuffer", compression: "STORE", types });
+  if (!zipBuffer || zipBuffer.length === 0) throw new Error("shapefile 生成失败：图层没有支持的几何类型");
 
-  // 包装为 FeatureCollection 如果还不是
-  const fc = geojson.type === "FeatureCollection"
-    ? geojson
-    : { type: "FeatureCollection", features: [geojson] };
-
-  // 写 Shapefile
-  const zipPath = await writeShapefile(fc, dataDir, layerName);
-  console.log(`[publish] Shapefile 已保存: ${dataDir}`);
-
-  // 3. 删除旧 datastore（如果存在）
+  // 2. 删除同名旧 datastore（允许重新发布）
   await fetch(`${GS_URL}/rest/workspaces/${WORKSPACE}/datastores/${layerName}?recurse=true`, {
     method: "DELETE",
     headers: { Authorization: GS_AUTH },
   });
 
-  // 4. 创建 Shapefile 目录类型 datastore
-  const storeBody = {
-    dataStore: {
-      name: layerName,
-      type: "Directory of spatial files (shapefiles)",
-      connectionParameters: {
-        entry: [
-          { "@key": "directory", $: `file:${dataDir}` }
-        ]
-      }
-    }
-  };
-
-  const storeRes = await fetch(`${GS_URL}/rest/workspaces/${WORKSPACE}/datastores`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: GS_AUTH },
-    body: JSON.stringify(storeBody),
-  });
-
-  if (!storeRes.ok) {
-    const err = await storeRes.text();
-    throw new Error(`创建 datastore 失败: ${err.slice(0, 200)}`);
-  }
-  console.log("[publish] datastore 已创建");
-
-  // 5. 发布图层
-  const typeBody = {
-    featureType: {
-      name: layerName,
-      title: layerName,
-      srs: "EPSG:4326",
-    }
-  };
-
-  const typeRes = await fetch(
-    `${GS_URL}/rest/workspaces/${WORKSPACE}/datastores/${layerName}/featuretypes`,
+  // 3. 上传 shapefile（configure=all 自动发布 featuretype）
+  const res = await fetch(
+    `${GS_URL}/rest/workspaces/${WORKSPACE}/datastores/${layerName}/file.shp?configure=all`,
     {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: GS_AUTH },
-      body: JSON.stringify(typeBody),
+      method: "PUT",
+      headers: { "Content-Type": "application/zip", Authorization: GS_AUTH },
+      body: Buffer.from(zipBuffer),
     }
   );
-
-  // 如果图层已存在也算成功
-  const typeText = await typeRes.text();
-  if (!typeRes.ok && !typeText.includes("already exists")) {
-    throw new Error(`发布图层失败: ${typeText.slice(0, 200)}`);
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`GeoServer 上传失败 (${res.status}): ${err.slice(0, 200)}`);
   }
-  console.log("[publish] 图层已发布");
 
-  const wmsUrl = `${GS_URL}/${WORKSPACE}/wms`;
-  const wfsUrl = `${GS_URL}/${WORKSPACE}/ows`;
-
+  const wmsUrl = `/geoserver/${WORKSPACE}/wms`;
+  const wfsUrl = `/geoserver/${WORKSPACE}/ows`;
   return {
     wmsUrl,
     wfsUrl,
     layerName,
-    summary: `图层 "${layerName}" 已发布到 GeoServer`,
+    summary: `图层 "${layerName}" 已发布到 GeoServer WMS/WFS`,
   };
 }
 
@@ -110,17 +69,4 @@ async function ensureWorkspace() {
   });
 }
 
-/**
- * GeoJSON → Shapefile（shp-write 返回 zip buffer）
- */
-function writeShapefile(geojson, dir, name) {
-  return new Promise((resolve, reject) => {
-    shpWrite.write(geojson, { folder: dir, filename: name, outputType: "file" }, (err) => {
-      if (err) return reject(err);
-      console.log("[publish] shapefile files:", fs.readdirSync(dir));
-      resolve(path.join(dir, `${name}.shp`));
-    });
-  });
-}
-
-module.exports = { name: "publish", description: "发布图层：将 GeoJSON 转为 Shapefile 并发布到 GeoServer WMS/WFS", execute };
+module.exports = { name: "publish", description: "发布图层：将 GeoJSON 发布到 GeoServer WMS/WFS", execute };

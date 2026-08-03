@@ -5,6 +5,9 @@ interface LayerPanelProps {
   visible: Record<string, boolean>;
   onToggleVisibility: (name: string) => void;
   onDelete: (name: string) => void;
+  onPublish: (name: string) => void;
+  onExport: (name: string) => void;
+  publishing?: string | null;
 }
 
 function layerColor(producedBy?: string): string {
@@ -22,7 +25,7 @@ function layerColor(producedBy?: string): string {
   }
 }
 
-export function LayerPanel({ layers, visible, onToggleVisibility, onDelete }: LayerPanelProps) {
+export function LayerPanel({ layers, visible, onToggleVisibility, onDelete, onPublish, onExport, publishing }: LayerPanelProps) {
   return (
     <aside
       style={{
@@ -91,6 +94,41 @@ export function LayerPanel({ layers, visible, onToggleVisibility, onDelete }: La
               <span style={{ color: "var(--text-dim)" }}>
                 {l.meta?.produced_by ?? "未标记"} · {new Date(l.createdAt).toLocaleTimeString()}
               </span>
+            </div>
+            <div style={{ marginTop: 6, display: "flex", gap: 6 }}>
+              <button
+                onClick={() => onPublish(l.name)}
+                disabled={publishing === l.name}
+                style={{
+                  flex: 1,
+                  padding: "3px 0",
+                  fontSize: 10.5,
+                  border: "1px solid var(--border)",
+                  borderRadius: 5,
+                  background: "var(--bg-panel)",
+                  color: "var(--text)",
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                }}
+              >
+                {publishing === l.name ? "发布中..." : "发布 WMS"}
+              </button>
+              <button
+                onClick={() => onExport(l.name)}
+                style={{
+                  flex: 1,
+                  padding: "3px 0",
+                  fontSize: 10.5,
+                  border: "1px solid var(--border)",
+                  borderRadius: 5,
+                  background: "var(--bg-panel)",
+                  color: "var(--text)",
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                }}
+              >
+                导出 GeoJSON
+              </button>
             </div>
           </div>
         );

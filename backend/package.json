@@ -11,8 +11,10 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@mapbox/shp-write": "^0.4.3",
     "@turf/turf": "^7.3.5",
     "express": "^5.2.1",
+    "http-proxy-middleware": "^4.2.0",
     "shapefile": "^0.6.6",
     "shp-write": "^0.3.2",
     "ws": "^8.21.1"

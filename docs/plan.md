@@ -22,7 +22,7 @@
 - M0 脚手架：Vite+React+TS、ESLint/Prettier、docs、AGENTS.md ✅
 - M1 前端主页面：三栏 + 双视图 + 图层管理器骨架 ✅
 - M2 工具层：22 个工具（overlay/proximity/statistics/extraction/geoprocessing/meta）+ layer_store + 测试 ✅（链式分析已打通，剩 GeoServer 发布）
-- M3 GeoServer 发布 + 结果导出
+- M3 GeoServer 发布 + 结果导出 ✅（GeoJSON→shapefile 上传 WMS/WFS、GeoJSON/PNG 导出、/geoserver 同源代理）
 - M4 端到端验收
 
 ## 参考
