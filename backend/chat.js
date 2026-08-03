@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const { listTools, executeTool } = require("./tools/registry");
+const layers = require("./layers/store");
 
 /**
  * 加载 skills 目录下所有的 SKILL.md 文件
@@ -132,7 +133,10 @@ function formatToolResult(tool, result) {
       ? result.geojson.features.length
       : 1
     : 0;
-  return `[工具 ${tool} 执行结果]\n${result.summary}\nGeoJSON 特征数: ${featureCount}`;
+  const layerHint = result.layerName
+    ? `\n该结果已自动保存为图层「${result.layerName}」。下一步需要引用它时，把图层名「${result.layerName}」直接作为 input/inputB/clipLayer/points/polygons 等参数即可。`
+    : "";
+  return `[工具 ${tool} 执行结果]\n${result.summary}\nGeoJSON 特征数: ${featureCount}${layerHint}`;
 }
 
 /**
@@ -179,6 +183,16 @@ async function chat(userMessage, history = []) {
 
       try {
         const result = await executeTool(name, params);
+        // 立即把空间结果注册进 layer_store，供后续步骤按图层名链式引用
+        if (result.geojson) {
+          const layerName = layers.generateName(name);
+          layers.put(layerName, result.geojson, {
+            produced_by: name,
+            parents: (result.meta && result.meta.parents) || [],
+            params,
+          });
+          result.layerName = layerName;
+        }
         toolCalls.push({ tool: name, params, result });
         messages.push({ role: "tool", tool_call_id: tc.id, content: formatToolResult(name, result) });
         console.log(`[Agent] 工具 ${name} 成功: ${result.summary}`);

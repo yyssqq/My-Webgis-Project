@@ -132,16 +132,7 @@ app.post("/api/chat", async (req, res) => {
     // 把工具执行结果通过 WebSocket 广播（前端可以直接渲染到地图）
     for (const tc of toolCalls) {
       if (tc.result && tc.result.geojson) {
-        // 注册进 layer_store，前端图层面板即可列出
-        const name = layers.generateName(tc.tool);
-        layers.put(name, tc.result.geojson, {
-          produced_by: tc.tool,
-          parents: Array.isArray(tc.params?.input_layers) ? tc.params.input_layers : [],
-          params: tc.params,
-        });
-        tc.result.layerName = name;
-
-        // 广播 GeoJSON 给前端直接渲染
+        // chat.js 已在循环内把结果注册进 layer_store 并设置 layerName，这里只负责广播
         const broadcast = JSON.stringify({ type: "tool_result", tool: tc.tool, result: tc.result });
         wss.clients.forEach((client) => {
           if (client.readyState === 1) client.send(broadcast);
