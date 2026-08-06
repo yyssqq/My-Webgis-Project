@@ -13,3 +13,8 @@ runtime/
 frontend/tsconfig.tsbuildinfo
 frontend/public/cesium/
 screenshot-*.png
+
+# 会话临时产物
+generate_docx.js
+graphify-out/
+开发计划.docx
