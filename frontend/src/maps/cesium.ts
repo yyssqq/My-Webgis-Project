@@ -2,12 +2,15 @@
 // Cesium 静态资源在 public/cesium/（postinstall 从 node_modules 复制），加载前必须设置 CESIUM_BASE_URL。
 window.CESIUM_BASE_URL = "/cesium/";
 
+import "cesium/Build/Cesium/Widgets/widgets.css";
+
 import {
   Cartesian3,
   Color,
   EllipsoidTerrainProvider,
   GeoJsonDataSource,
   Math as CesiumMath,
+  Rectangle,
   Viewer,
 } from "cesium";
 
@@ -19,6 +22,7 @@ export interface CesiumHandle {
   clear(): void;
   resize(): void;
   flyToLonLat(lng: number, lat: number, height?: number): void;
+  zoomToLayer(geojson: GeoJSON.GeoJsonObject): void;
 }
 
 const PALETTE = ["#2ecc71", "#4f8ef7", "#e74c3c", "#f39c12", "#9b59b6", "#1abc9c"];
@@ -85,6 +89,37 @@ export function createCesiumViewer(container: HTMLElement): CesiumHandle {
         destination: Cartesian3.fromDegrees(lng, lat, height),
         orientation: { heading: 0, pitch: CesiumMath.toRadians(-90), roll: 0 },
       });
+    },
+
+    zoomToLayer(geojson) {
+      // 从 GeoJSON 中提取所有坐标，计算包围矩形，直接飞行
+      const coords: number[][] = [];
+      function walk(g: any) {
+        if (!g) return;
+        if (g.type === "FeatureCollection") {
+          g.features?.forEach((f: any) => walk(f));
+        } else if (g.type === "Feature") {
+          walk(g.geometry);
+        } else if (g.type === "Point") {
+          coords.push(g.coordinates);
+        } else if (g.type === "MultiPoint" || g.type === "LineString") {
+          g.coordinates?.forEach((c: number[]) => coords.push(c));
+        } else if (g.type === "MultiLineString" || g.type === "Polygon") {
+          g.coordinates?.forEach((ring: number[][]) => ring.forEach((c: number[]) => coords.push(c)));
+        } else if (g.type === "MultiPolygon") {
+          g.coordinates?.forEach((poly: number[][][]) => poly.forEach((ring: number[][]) => ring.forEach((c: number[]) => coords.push(c))));
+        }
+      }
+      walk(geojson);
+      if (coords.length === 0) return;
+      const lngs = coords.map(c => c[0]);
+      const lats = coords.map(c => c[1]);
+      const west = Math.min(...lngs);
+      const east = Math.max(...lngs);
+      const south = Math.min(...lats);
+      const north = Math.max(...lats);
+      const rect = Rectangle.fromDegrees(west - 0.01, south - 0.01, east + 0.01, north + 0.01);
+      viewer.camera.flyTo({ destination: rect, duration: 1.0 });
     },
   };
 }

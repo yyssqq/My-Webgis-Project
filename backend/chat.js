@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const { listTools, executeTool } = require("./tools/registry");
 const layers = require("./layers/store");
+const logger = require("./knowledge/eventLogger");
 
 /**
  * 加载 skills 目录下所有的 SKILL.md 文件
@@ -147,17 +148,22 @@ function formatToolResult(tool, result) {
  * @returns {object}            { reply, toolCalls, messages }
  */
 async function chat(userMessage, history = []) {
-  // 保证系统提示词始终在场（前端可能只回传 user/assistant 文本历史）
-  const hasSystem = history.length > 0 && history[0].role === "system";
+  // 安全：系统提示词永远由服务端构建，不接受客户端传入的 system 角色消息
+  const safeHistory = history.filter(m => m.role === "user" || m.role === "assistant");
   const messages = [
-    ...(hasSystem ? history : [{ role: "system", content: buildSystemPrompt() }, ...history]),
+    { role: "system", content: buildSystemPrompt() },
+    ...safeHistory,
     { role: "user", content: userMessage },
   ];
   const toolCalls = [];
   const tools = buildToolsSchema();
   let finalReply = null;
+  const MAX_STEPS = 8;
 
-  const MAX_STEPS = 8; // 最多循环 8 步，防止死循环
+  // ---- 事件日志：会话开始 ----
+  const session = logger.newSessionId();
+  logger.sessionStart(session);
+  logger.userQuery(session, userMessage);
 
   for (let step = 0; step < MAX_STEPS; step++) {
     const msg = await callLLM(messages, tools);
@@ -181,24 +187,35 @@ async function chat(userMessage, history = []) {
       }
       console.log(`[Agent] 第 ${step + 1} 步：调用工具 ${name}，参数 ${JSON.stringify(params)}`);
 
+      const t0 = Date.now();
       try {
         const result = await executeTool(name, params);
+        const durationMs = Date.now() - t0;
         // 立即把空间结果注册进 layer_store，供后续步骤按图层名链式引用
         if (result.geojson) {
           const layerName = layers.generateName(name);
+          const featureCount = result.geojson.type === "FeatureCollection"
+            ? result.geojson.features?.length ?? 1 : 1;
           layers.put(layerName, result.geojson, {
             produced_by: name,
             parents: (result.meta && result.meta.parents) || [],
             params,
           });
           result.layerName = layerName;
+          // 事件日志：图层创建
+          logger.layerCreated(session, layerName, name, featureCount);
         }
         toolCalls.push({ tool: name, params, result });
         messages.push({ role: "tool", tool_call_id: tc.id, content: formatToolResult(name, result) });
-        console.log(`[Agent] 工具 ${name} 成功: ${result.summary}`);
+        // 事件日志：工具执行
+        logger.toolExec(session, name, params, result.summary, durationMs, result.layerName || null);
+        console.log(`[Agent] 工具 ${name} 成功 (${durationMs}ms): ${result.summary}`);
       } catch (err) {
+        const durationMs = Date.now() - t0;
         console.error(`[Agent] 工具 ${name} 失败:`, err.message);
         toolCalls.push({ tool: name, params, error: err.message });
+        // 事件日志：工具失败
+        logger.toolExec(session, name, params, `FAILED: ${err.message}`, durationMs, null);
         messages.push({ role: "tool", tool_call_id: tc.id, content: `[工具 ${name} 执行失败] ${err.message}\n请换一种方法，或告知用户出了什么问题。` });
       }
     }
@@ -210,6 +227,10 @@ async function chat(userMessage, history = []) {
     const msg = await callLLM(messages);
     finalReply = msg.content || "";
   }
+
+  // ---- 事件日志：会话结束 ----
+  logger.assistantReply(session, finalReply || "");
+  logger.sessionEnd(session, toolCalls.length);
 
   return { reply: finalReply, toolCalls, messages };
 }

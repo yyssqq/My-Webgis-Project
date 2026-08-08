@@ -3,6 +3,7 @@ const http = require("http");
 const path = require("path");
 const { WebSocketServer } = require("ws");
 const { createProxyMiddleware } = require("http-proxy-middleware");
+const rateLimit = require("express-rate-limit");
 const { listTools, executeTool } = require("./tools/registry");
 const { chat } = require("./chat");
 const publish = require("./tools/publish");
@@ -13,17 +14,60 @@ const server = http.createServer(app);
 
 // ===== 中间件 =====
 
-// 解析 JSON 请求体（让后端能读懂前端 fetch 发来的 JSON 数据）
-app.use(express.json());
+// 解析 JSON 请求体（限制 10MB，防止大文件攻击）
+app.use(express.json({ limit: "10mb" }));
 
-// CORS 跨域
+// CORS 白名单
+const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS || "http://localhost:5173,http://localhost:3000").split(",").map(s => s.trim());
 app.use((req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  const origin = req.headers.origin;
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  }
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, x-api-key");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
   if (req.method === "OPTIONS") return res.sendStatus(200);
   next();
 });
+
+// API Key 认证中间件（健康检查、OPTIONS 除外）
+const API_KEY = process.env.ADMIN_API_KEY || "";
+function authGuard(req, res, next) {
+  if (req.path === "/api/health") return next();
+  if (req.method === "OPTIONS") return next();
+
+  // 开发模式：无 ADMIN_API_KEY 时放行所有请求
+  if (!API_KEY) {
+    return next();
+  }
+
+  const key = req.headers["x-api-key"];
+  if (key !== API_KEY) {
+    return res.status(401).json({ error: "未授权：缺少有效的 x-api-key" });
+  }
+  next();
+}
+app.use(authGuard);
+
+// 请求限流：/api/chat 每分钟最多 10 次
+const chatLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "请求太频繁，请稍后再试" },
+});
+app.use("/api/chat", chatLimiter);
+
+// 全局限流：其他 API 每分钟 60 次
+app.use("/api", rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+}));
 
 // 提供前端静态文件（Cesium 需要 HTTP 访问）
 app.use(express.static(path.join(__dirname, "..", "frontend")));
@@ -189,23 +233,22 @@ app.post("/api/chat", async (req, res) => {
 
 // ===== WebSocket =====
 
+// 只保留最近 200 条点击记录，防止内存无限制增长
 const clickHistory = [];
+const MAX_CLICK_HISTORY = 200;
 const wss = new WebSocketServer({ server });
 
 wss.on("connection", (ws) => {
   console.log("新客户端已连接");
 
-  // 收到消息时解析
   ws.on("message", (data) => {
     try {
       const msg = JSON.parse(data.toString());
-      console.log("WebSocket 收到:", msg);
 
-      // 如果是客户端发来的坐标
       if (msg.type === "click") {
         clickHistory.push({ lng: msg.lng, lat: msg.lat, time: new Date().toISOString() });
+        if (clickHistory.length > MAX_CLICK_HISTORY) clickHistory.shift();
 
-        // 广播给所有客户端
         const broadcast = JSON.stringify({
           type: "click",
           lng: msg.lng,
@@ -217,7 +260,7 @@ wss.on("connection", (ws) => {
         });
       }
     } catch {
-      ws.send(`收到文本消息: ${data.toString()}`);
+      // 非 JSON 消息静默忽略（不回显，避免信息泄露）
     }
   });
 
@@ -228,13 +271,26 @@ wss.on("connection", (ws) => {
   ws.send(JSON.stringify({
     type: "welcome",
     message: "WebSocket 连接成功！",
-    history: clickHistory,
   }));
 });
 
 // ===== 启动 =====
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
+
+// 优雅退出：SIGTERM 时关闭服务器和所有 WS 连接
+process.on("SIGTERM", () => {
+  console.log("[server] 收到 SIGTERM，开始优雅退出...");
+  wss.clients.forEach((c) => c.close());
+  server.close(() => process.exit(0));
+});
+process.on("SIGINT", () => {
+  console.log("[server] 收到 SIGINT，开始优雅退出...");
+  wss.clients.forEach((c) => c.close());
+  server.close(() => process.exit(0));
+});
+
 server.listen(PORT, () => {
   console.log(`服务器运行在 http://localhost:${PORT}`);
+  if (!API_KEY) console.warn("[auth] ⚠️ 未配置 ADMIN_API_KEY，所有请求将被放行（仅开发模式）");
 });

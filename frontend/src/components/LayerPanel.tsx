@@ -1,134 +1,37 @@
 import type { LayerInfo } from "../types";
+import s from "./LayerPanel.module.css";
 
 interface LayerPanelProps {
-  layers: LayerInfo[];
-  visible: Record<string, boolean>;
-  onToggleVisibility: (name: string) => void;
-  onDelete: (name: string) => void;
-  onPublish: (name: string) => void;
-  onExport: (name: string) => void;
+  layers: LayerInfo[]; visible: Record<string, boolean>;
+  onToggleVisibility: (name: string) => void; onDelete: (name: string) => void;
+  onPublish: (name: string) => void; onExport: (name: string) => void;
+  onZoomTo: (name: string) => void;
   publishing?: string | null;
 }
 
-function layerColor(producedBy?: string): string {
-  switch (producedBy) {
-    case "buffer":
-      return "#e74c3c";
-    case "clip":
-      return "#f39c12";
-    case "intersect":
-    case "union":
-    case "erase":
-      return "#9b59b6";
-    default:
-      return "#2ecc71";
-  }
-}
-
-export function LayerPanel({ layers, visible, onToggleVisibility, onDelete, onPublish, onExport, publishing }: LayerPanelProps) {
+export function LayerPanel({ layers, visible, onToggleVisibility, onDelete, onPublish, onExport, onZoomTo, publishing }: LayerPanelProps) {
   return (
-    <aside
-      style={{
-        width: 252,
-        background: "var(--bg-panel)",
-        borderRight: "1px solid var(--border)",
-        display: "flex",
-        flexDirection: "column",
-        overflowY: "auto",
-        padding: 14,
-        gap: 10,
-        fontSize: 12.5,
-      }}
-    >
-      <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 1.2, color: "var(--text-dim)", fontWeight: 600 }}>
-        图层
-      </div>
-
-      {layers.length === 0 && (
-        <div style={{ color: "var(--text-dim)", fontSize: 11 }}>
-          暂无图层，运行分析后结果会显示在这里
-        </div>
-      )}
-
+    <aside className={s.panel}>
+      <div className={s.header}>图层 <span className={s.count}>{layers.length}</span></div>
+      {layers.length === 0 && <div className={s.empty}>暂无图层，运行分析后显示</div>}
       {layers.map((l) => {
-        const isVisible = visible[l.name] !== false;
-        const color = layerColor(l.meta?.produced_by);
+        const on = visible[l.name] !== false;
         return (
-          <div
-            key={l.name}
-            style={{
-              background: "var(--bg-card)",
-              border: "1px solid var(--border)",
-              borderRadius: 8,
-              padding: "8px 10px",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <input
-                type="checkbox"
-                checked={isVisible}
-                onChange={() => onToggleVisibility(l.name)}
-                title="显隐"
-              />
-              <span style={{ flex: 1, color: "#fff", fontWeight: 600, fontSize: 12.5, wordBreak: "break-all" }}>
-                {l.name}
-              </span>
-              <span
-                onClick={() => onDelete(l.name)}
-                style={{ color: "var(--text-dim)", cursor: "pointer", fontSize: 13 }}
-                title="删除"
-              >
-                ✕
-              </span>
+          <div key={l.name} className={`${s.card} ${on ? s.cardActive : ""}`}>
+            <div className={s.row}>
+              <div className={`${s.check} ${on ? s.checkOn : ""}`}
+                onClick={() => onToggleVisibility(l.name)} />
+              <span className={s.name}>{l.name}</span>
+              <span className={s.del}
+                onClick={() => { if (window.confirm(`确认删除「${l.name}」？`)) onDelete(l.name); }}
+                title="删除">×</span>
             </div>
-            <div style={{ marginTop: 4, display: "flex", alignItems: "center", gap: 6, fontSize: 10.5 }}>
-              <span
-                style={{
-                  display: "inline-block",
-                  width: 8,
-                  height: 8,
-                  borderRadius: "50%",
-                  background: color,
-                }}
-              />
-              <span style={{ color: "var(--text-dim)" }}>
-                {l.meta?.produced_by ?? "未标记"} · {new Date(l.createdAt).toLocaleTimeString()}
-              </span>
-            </div>
-            <div style={{ marginTop: 6, display: "flex", gap: 6 }}>
-              <button
-                onClick={() => onPublish(l.name)}
-                disabled={publishing === l.name}
-                style={{
-                  flex: 1,
-                  padding: "3px 0",
-                  fontSize: 10.5,
-                  border: "1px solid var(--border)",
-                  borderRadius: 5,
-                  background: "var(--bg-panel)",
-                  color: "var(--text)",
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                }}
-              >
-                {publishing === l.name ? "发布中..." : "发布 WMS"}
-              </button>
-              <button
-                onClick={() => onExport(l.name)}
-                style={{
-                  flex: 1,
-                  padding: "3px 0",
-                  fontSize: 10.5,
-                  border: "1px solid var(--border)",
-                  borderRadius: 5,
-                  background: "var(--bg-panel)",
-                  color: "var(--text)",
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                }}
-              >
-                导出 GeoJSON
-              </button>
+            <div className={s.meta}>{l.meta?.produced_by ?? "未知"} · {new Date(l.createdAt).toLocaleTimeString()}</div>
+            <div className={s.actions}>
+              <button className={s.btn} onClick={() => onZoomTo(l.name)}>缩放</button>
+              <button className={s.btn} onClick={() => onPublish(l.name)} disabled={publishing === l.name}>
+                {publishing === l.name ? "..." : "发布"}</button>
+              <button className={s.btn} onClick={() => onExport(l.name)}>导出</button>
             </div>
           </div>
         );

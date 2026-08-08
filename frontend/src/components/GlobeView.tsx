@@ -9,24 +9,34 @@ interface GlobeViewProps {
 export function GlobeView({ active, onReady }: GlobeViewProps) {
   const elRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<CesiumHandle | null>(null);
+  const initialized = useRef(false);
 
+  // 只在 active 首次为 true 时创建 Viewer（避免在 display:none 里初始化）
   useEffect(() => {
-    if (!elRef.current) return;
+    if (!active || !elRef.current || initialized.current) return;
+    initialized.current = true;
     const h = createCesiumViewer(elRef.current);
     handleRef.current = h;
     onReady(h);
     return () => {
       h.viewer.destroy();
       handleRef.current = null;
+      initialized.current = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [active, onReady]);
 
   useEffect(() => {
     if (active) handleRef.current?.resize();
   }, [active]);
 
   return (
-    <div ref={elRef} style={{ position: "absolute", inset: 0, display: active ? "block" : "none" }} />
+    <div
+      ref={elRef}
+      style={{
+        position: "absolute",
+        inset: 0,
+        visibility: active ? "visible" : "hidden",
+      }}
+    />
   );
 }

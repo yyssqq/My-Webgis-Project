@@ -1,0 +1,85 @@
+.panel {
+  width: 370px; background: var(--bg-panel);
+  border-left: 1px solid var(--border);
+  display: flex; flex-direction: column;
+}
+.header {
+  padding: var(--space-4) var(--space-5); border-bottom: 1px solid var(--border);
+  font-weight: 600; font-size: var(--text-base); color: var(--text-1);
+}
+.messages {
+  flex: 1; overflow-y: auto; padding: var(--space-4) var(--space-5);
+  display: flex; flex-direction: column; gap: var(--space-3);
+}
+.msg {
+  max-width: 85%; padding: var(--space-3) var(--space-4);
+  font-size: var(--text-sm); line-height: 1.6;
+  word-break: break-word;
+  animation: fadeIn 0.2s ease;
+}
+.msgUser {
+  align-self: flex-end;
+  background: #F0F4F8;
+  border: 1px solid var(--border);
+  border-radius: var(--radius) var(--radius) 4px var(--radius);
+  color: var(--text-1);
+}
+.msgAssistant {
+  align-self: flex-start;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 4px var(--radius) var(--radius) 4px;
+  color: var(--text-2);
+  padding: var(--space-3) var(--space-4);
+}
+.msgSystem {
+  align-self: center; background: none; border: none;
+  color: var(--text-3); font-size: var(--text-xs);
+  text-align: center; max-width: 100%; padding: var(--space-1) 0;
+}
+.timer {
+  align-self: flex-start; color: var(--text-3);
+  font-size: var(--text-xs); padding-left: var(--space-5);
+  font-variant-numeric: tabular-nums;
+}
+.input {
+  padding: var(--space-3) var(--space-4); border-top: 1px solid var(--border);
+  display: flex; gap: var(--space-2);
+}
+.textarea {
+  flex: 1; background: var(--bg-input);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text-1); padding: var(--space-3);
+  font-size: var(--text-sm); font-family: inherit;
+  resize: none; height: 44px; outline: none; line-height: 1.5;
+  transition: border-color 0.2s;
+}
+.textarea:focus { border-color: var(--accent); background: var(--bg-panel); }
+.textarea::placeholder { color: var(--text-3); }
+.send {
+  padding: 0 18px; border: none; border-radius: var(--radius);
+  background: var(--accent); color: #fff; font-size: var(--text-sm); font-weight: 600;
+  cursor: pointer; font-family: inherit; transition: background 0.15s; flex-shrink: 0;
+}
+.send:hover { background: var(--accent-hover); }
+.send:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* Markdown 渲染样式 */
+.msg table {
+  width: 100%; border-collapse: collapse; margin: var(--space-2) 0;
+  font-size: var(--text-xs);
+}
+.msg th {
+  background: var(--bg-hover); color: var(--text-1); font-weight: 600;
+  padding: 5px 8px; border: 1px solid var(--border); text-align: left;
+}
+.msg td {
+  padding: 4px 8px; border: 1px solid var(--border); color: var(--text-2);
+}
+.msg tr:nth-child(even) td { background: var(--bg-card); }
+.msg code {
+  background: var(--bg-hover); padding: 1px 5px; border-radius: 3px;
+  font-size: 0.9em; font-family: monospace;
+}
+.msg strong { color: var(--text-1); font-weight: 600; }

@@ -1,0 +1,37 @@
+.bar {
+  height: 48px; display: flex; align-items: center; padding: 0 var(--space-5);
+  background: var(--bg-panel); border-bottom: 1px solid var(--border);
+  z-index: 10; gap: var(--space-3);
+}
+.logo {
+  font-weight: 700; font-size: 16px; color: var(--text-1);
+  letter-spacing: -0.3px;
+}
+.logo span { color: var(--accent); }
+.badge {
+  font-size: 10px; font-weight: 500; color: var(--accent);
+  background: var(--accent-bg); padding: 3px 10px; border-radius: 12px;
+}
+.toggle {
+  margin-left: auto; display: flex;
+  background: var(--bg-page); border-radius: var(--radius-sm);
+  padding: 3px; gap: 1px;
+}
+.toggleBtn {
+  padding: 5px 14px; font-size: var(--text-xs); border: none;
+  background: transparent; color: var(--text-3); cursor: pointer;
+  font-family: inherit; border-radius: 4px; font-weight: 500;
+  transition: all 0.15s;
+}
+.toggleBtn:hover { color: var(--text-2); }
+.toggleBtnActive {
+  background: var(--bg-panel); color: var(--text-1);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+}
+.status {
+  display: flex; align-items: center; gap: 6px;
+  font-size: var(--text-xs); color: var(--text-3);
+}
+.dot { width: 7px; height: 7px; border-radius: 50%; }
+.dotOn { background: var(--accent); }
+.dotOff { background: var(--border-strong); }

@@ -22,6 +22,7 @@ export interface OlHandle {
   addWms(name: string, url: string): void;
   removeWms(name: string): void;
   exportPng(): void;
+  zoomToLayer(geojson: GeoJSON.GeoJsonObject): void;
 }
 
 const PALETTE = ["#2ecc71", "#4f8ef7", "#e74c3c", "#f39c12", "#9b59b6", "#1abc9c"];
@@ -91,6 +92,18 @@ export function createOlMap(container: HTMLElement): OlHandle {
 
     flyToLonLat(lng, lat, zoom = 5) {
       map.getView().animate({ center: fromLonLat([lng, lat]), zoom });
+    },
+
+    zoomToLayer(geojson) {
+      const features = new GeoJSONFormat().readFeatures(geojson, {
+        dataProjection: "EPSG:4326", featureProjection: "EPSG:3857",
+      });
+      if (features.length === 0) return;
+      const src = new VectorSource({ features });
+      const extent = src.getExtent();
+      if (extent && isFinite(extent[0])) {
+        map.getView().fit(extent, { padding: [80, 80, 80, 80], maxZoom: 16, duration: 800 });
+      }
     },
 
     addWms(name, url) {

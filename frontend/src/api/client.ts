@@ -1,9 +1,17 @@
 // 后端 HTTP 客户端（开发期走 Vite proxy /api → :3000）
 import type { ChatMessage, ChatResponse, LayerInfo, ToolMeta, ToolResult } from "../types";
 
+const BASE = import.meta.env.VITE_API_BASE_URL || "";
+const API_KEY = import.meta.env.VITE_API_KEY || "";
+
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
-    headers: { "Content-Type": "application/json" },
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (API_KEY) headers["x-api-key"] = API_KEY;
+
+  const res = await fetch(`${BASE}${url}`, {
+    headers,
     ...init,
   });
   if (!res.ok) {

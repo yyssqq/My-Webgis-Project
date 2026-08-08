@@ -1,28 +1,59 @@
 const turf = require("@turf/turf");
-const { toFeature, countFeatures } = require("../_util");
+const { toFeatures, countFeatures } = require("../_util");
 
 function execute(params) {
   const { input, inputB } = params;
-  const a = toFeature(input);
-  const b = toFeature(inputB);
-  const aMinusB = turf.difference({ type: "FeatureCollection", features: [a, b] });
-  const bMinusA = turf.difference({ type: "FeatureCollection", features: [b, a] });
-  const parts = [aMinusB, bMinusA].filter(Boolean);
-  if (parts.length === 0) throw new Error("两个图层完全相同，无对称差");
-  const result =
-    parts.length === 1
-      ? parts[0]
-      : turf.union({ type: "FeatureCollection", features: parts });
+  if (!input || !inputB)
+    throw new Error("symmetricDifference 需要 input 和 inputB 两个图层名");
+
+  // A - B
+  const aMinusB = [];
+  for (const a of toFeatures(input)) {
+    let remaining = a;
+    for (const b of toFeatures(inputB)) {
+      try {
+        const diff = turf.difference({ type: "FeatureCollection", features: [remaining, b] });
+        if (!diff) { remaining = null; break; }
+        remaining = diff;
+      } catch {}
+    }
+    if (remaining) aMinusB.push(remaining);
+  }
+
+  // B - A
+  const bMinusA = [];
+  for (const b of toFeatures(inputB)) {
+    let remaining = b;
+    for (const a of toFeatures(input)) {
+      try {
+        const diff = turf.difference({ type: "FeatureCollection", features: [remaining, a] });
+        if (!diff) { remaining = null; break; }
+        remaining = diff;
+      } catch {}
+    }
+    if (remaining) bMinusA.push(remaining);
+  }
+
+  const allDiff = [...aMinusB, ...bMinusA];
+  if (allDiff.length === 0) throw new Error("两个图层完全相同，无对称差");
+
+  let result = allDiff[0];
+  for (let i = 1; i < allDiff.length; i++) {
+    try {
+      result = turf.union({ type: "FeatureCollection", features: [result, allDiff[i]] });
+    } catch {}
+  }
+
   return {
     geojson: result,
-    summary: `对称差完成（各自不相交的部分合并），得到 ${countFeatures(result)} 个要素`,
+    summary: `对称差完成：${countFeatures(input)} △ ${countFeatures(inputB)} → ${countFeatures(result)} 个差异区域`,
     meta: { produced_by: "symmetricDifference", params },
   };
 }
 
 module.exports = {
   name: "symmetricDifference",
-  description: "叠加对称差：返回两个图层各自独有的部分",
+  description: "叠加对称差：返回两个图层各自独有的部分（支持多要素）",
   paramsSchema: {
     type: "object",
     properties: {

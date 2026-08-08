@@ -46,3 +46,14 @@ export interface LayerInfo {
 export interface ViewMode {
   kind: "2d" | "3d";
 }
+
+export interface PlanStep {
+  id: number;
+  label: string;
+  tool: string;
+}
+
+export interface PlanData {
+  title: string;
+  steps: PlanStep[];
+}
